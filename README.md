@@ -16,7 +16,7 @@ The public website is intentionally focused on earning, not internal operations.
 - The user dashboard shows only earning-relevant information: balance, available tasks and task completion.
 - Internal task-engine, ingestion and admin workflow details are kept out of the user-facing experience.
 
-Supabase supports password authentication using a phone number. For this no-OTP flow, enable Phone authentication and disable phone confirmation in the Supabase Auth settings; otherwise signup will return without an active session and the TaskFlow UI will stop the account flow. citeturn1search0turn1search1
+Supabase supports password authentication using a phone number. For this no-OTP flow, enable Phone authentication and disable phone confirmation in the Supabase Auth settings; otherwise signup will return without an active session and the TaskFlow UI will stop the account flow.
 
 ## Admin approval
 
@@ -74,4 +74,4 @@ Never trust client-side reward amounts or task correctness.
 
 ## Supabase authentication reference
 
-Supabase documents phone/password signup and login, including the requirement to enable phone authentication and the effect of phone confirmation settings. citeturn1search0
+Supabase documents phone/password signup and login, including the requirement to enable phone authentication and the effect of phone confirmation settings.
