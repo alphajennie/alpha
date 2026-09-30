@@ -153,6 +153,32 @@ begin
  order by created_at asc;
 end $$;
 
+create or replace function public.get_admin_overview()
+returns jsonb language plpgsql security definer set search_path=public,pg_catalog as $
+declare
+ pending_count integer;
+ approved_count integer;
+ active_count integer;
+ completed_count integer;
+ reward_total numeric(12,2);
+begin
+ if not exists(select 1 from public.profiles where id=auth.uid() and is_admin=true) then
+  raise exception 'Administrator access required';
+ end if;
+ select count(*) into pending_count from public.profiles where activation_status='pending';
+ select count(*) into approved_count from public.profiles where activation_status='approved';
+ select count(*) into active_count from public.tasks where active=true and quality_score>=80;
+ select count(*) into completed_count from public.task_assignments where status='submitted';
+ select coalesce(sum(amount),0) into reward_total from public.wallet_transactions where kind='task_reward';
+ return jsonb_build_object(
+  'pending_applications',pending_count,
+  'approved_users',approved_count,
+  'active_tasks',active_count,
+  'completed_tasks',completed_count,
+  'rewards_issued',reward_total
+ );
+end $;
+
 create or replace function public.set_activation_status(p_user_id uuid,p_status public.activation_status)
 returns jsonb language plpgsql security definer set search_path=public,pg_catalog as $$
 declare target public.profiles;
@@ -171,22 +197,64 @@ end $$;
 
 create or replace function public.get_next_task()
 returns jsonb language plpgsql security definer set search_path=public,pg_catalog as $$
-declare uid uuid:=auth.uid(); a public.task_assignments; t public.tasks; credits integer; activation public.activation_status;
+declare
+ uid uuid:=auth.uid();
+ a public.task_assignments;
+ t public.tasks;
+ credits integer;
+ activation public.activation_status;
 begin
  if uid is null then raise exception 'Not authenticated'; end if;
  select activation_status,task_credits into activation,credits from public.profiles where id=uid for update;
  if activation<>'approved' then return jsonb_build_object('status','PENDING_ACTIVATION','activation_status',activation); end if;
- select * into a from public.task_assignments where user_id=uid and status='available' order by assigned_at limit 1;
+
+ select a.* into a
+ from public.task_assignments a
+ join public.tasks t on t.id=a.task_id
+ where a.user_id=uid and a.status='available' and t.active=true and t.quality_score>=80
+ order by a.assigned_at
+ limit 1;
+
  if found then
-   select * into t from public.tasks where id=a.task_id and active=true;
-   if found then return jsonb_build_object('assignment_id',a.id,'task_id',t.id,'task_type',t.task_type,'answer_mode',t.answer_mode,'prompt',t.prompt,'asset_url',t.asset_url,'options',t.options,'remaining',credits); end if;
+   select * into t from public.tasks where id=a.task_id;
+   return jsonb_build_object('assignment_id',a.id,'task_id',t.id,'task_type',t.task_type,'answer_mode',t.answer_mode,'prompt',t.prompt,'asset_url',t.asset_url,'options',t.options,'remaining',credits);
  end if;
- if credits<=0 then return jsonb_build_object('status','NO_TASKS','remaining',0); end if;
- select * into t from public.tasks where active=true order by random() limit 1;
- if not found then return jsonb_build_object('status','NO_TASKS','remaining',credits); end if;
- insert into public.task_assignments(user_id,task_id) values(uid,t.id) on conflict do nothing returning * into a;
- update public.profiles set task_credits=task_credits-1 where id=uid returning task_credits into credits;
- return jsonb_build_object('assignment_id',a.id,'task_id',t.id,'task_type',t.task_type,'answer_mode',t.answer_mode,'prompt',t.prompt,'asset_url',t.asset_url,'options',t.options,'remaining',credits);
+
+ if credits<=0 then
+   return jsonb_build_object('status','NO_TASKS','remaining',0,'message','Your current task batch is complete.');
+ end if;
+
+ select t.* into t
+ from public.tasks t
+ where t.active=true
+   and t.quality_score>=80
+   and not exists(select 1 from public.task_assignments ax where ax.user_id=uid and ax.task_id=t.id)
+ order by random()
+ limit 1;
+
+ if not found then
+   return jsonb_build_object('status','NO_TASKS','remaining',credits,'message','No verified tasks are available right now. The task queue is empty.');
+ end if;
+
+ insert into public.task_assignments(user_id,task_id)
+ values(uid,t.id)
+ returning * into a;
+
+ update public.profiles
+ set task_credits=task_credits-1
+ where id=uid
+ returning task_credits into credits;
+
+ return jsonb_build_object(
+  'assignment_id',a.id,
+  'task_id',t.id,
+  'task_type',t.task_type,
+  'answer_mode',t.answer_mode,
+  'prompt',t.prompt,
+  'asset_url',t.asset_url,
+  'options',t.options,
+  'remaining',credits
+ );
 end $$;
 
 create or replace function public.submit_task_answer(p_assignment_id uuid,p_answer text)
@@ -219,6 +287,8 @@ revoke all on function public.is_current_user_admin() from public;
 grant execute on function public.is_current_user_admin() to authenticated;
 revoke all on function public.list_activation_requests() from public;
 grant execute on function public.list_activation_requests() to authenticated;
+revoke all on function public.get_admin_overview() from public;
+grant execute on function public.get_admin_overview() to authenticated;
 revoke all on function public.set_activation_status(uuid,public.activation_status) from public;
 grant execute on function public.set_activation_status(uuid,public.activation_status) to authenticated;
 revoke all on function public.get_next_task() from public;
