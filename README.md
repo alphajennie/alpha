@@ -10,7 +10,8 @@ The public website is intentionally focused on earning, not internal operations.
 - User access has two clear choices: **Register** and **Login**.
 - Registration uses name + Indian mobile number + password.
 - Login uses the registered Indian mobile number + password.
-- No OTP is used by the TaskFlow UI.
+- The mobile number is stored as the user's TaskFlow contact/login identifier; Supabase Auth uses an internal email-style identifier so **no phone-auth/SMS provider is involved**.
+- No OTP, SMS confirmation or Twilio integration is used by TaskFlow.
 - Every new application remains **pending** until an administrator approves it.
 - Approved users can receive tasks and earn rewards.
 - The user dashboard shows only earning-relevant information: balance, available tasks and task completion.
@@ -20,9 +21,10 @@ Supabase supports password authentication using a phone number. For this no-OTP 
 
 ## Admin approval
 
-1. Enable **Phone** authentication in Supabase Authentication.
-2. Disable **Confirm phone** because TaskFlow intentionally does not use OTP.
-3. Keep user signup enabled.
+1. Keep **Email** authentication enabled in Supabase Authentication.
+2. Disable **Confirm email** because TaskFlow creates sessions immediately and does not use email verification.
+3. Disable the **Phone** authentication provider.
+4. Remove any Twilio / SMS provider credentials from Supabase.
 4. Create a separate permanent Supabase admin user.
 5. Copy that user's Auth UUID.
 6. After running supabase/schema.sql, set the admin flag:
