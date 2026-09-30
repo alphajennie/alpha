@@ -15,3 +15,13 @@
 .approve,.reject{min-width:108px;justify-content:center;padding:12px 15px}
 .admin-empty{border-radius:24px;min-height:190px;display:grid;place-items:center;align-content:center}
 @media(max-width:650px){.admin-page .dashboard-head h2{font-size:34px}.admin-page .dashboard-head:after{display:none}}
+
+.admin-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:0 0 22px}
+.stat-card{padding:20px 22px;border-radius:22px}
+.stat-card span{display:block;font-size:11px;font-weight:700;color:#7b818d}
+.stat-card strong{display:block;margin-top:8px;font-size:28px;letter-spacing:-.05em}
+.admin-pipeline{margin:0 0 22px;padding:20px 22px;border:1px solid var(--line);border-radius:22px;background:#fafbfc}
+.admin-pipeline h3{margin:6px 0;font-size:18px;letter-spacing:-.03em}
+.admin-pipeline p{margin:0;color:var(--muted);font-size:12px;line-height:1.55;max-width:760px}
+@media(max-width:800px){.admin-stats{grid-template-columns:1fr 1fr}}
+@media(max-width:480px){.admin-stats{grid-template-columns:1fr}}
