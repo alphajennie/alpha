@@ -9,7 +9,7 @@ const TASK_TYPES={image:{label:'Image verification',icon:Image},text:{label:'Tex
 function App(){
  const [session,setSession]=useState(null),[loading,setLoading]=useState(true),[view,setView]=useState(window.location.pathname==='/admin'?'admin':'home'),[task,setTask]=useState(null),[remaining,setRemaining]=useState(null),[error,setError]=useState(''),[status,setStatus]=useState(null),[profile,setProfile]=useState(null);
  useEffect(()=>{if(!supabase){setLoading(false);return}supabase.auth.getSession().then(({data})=>{setSession(data.session);setLoading(false)});const {data:{subscription}}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s));return()=>subscription.unsubscribe()},[]);
- useEffect(()=>{if(session&&view!=='admin')loadStatus();},[session,view]);
+ useEffect(()=>{if(session&&view!=='admin')loadStatus();},[session]);
  async function loadStatus(){
   setError('');
   const {data,error}=await supabase.rpc('get_my_activation_status');
