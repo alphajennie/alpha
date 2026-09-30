@@ -154,7 +154,7 @@ begin
 end $$;
 
 create or replace function public.get_admin_overview()
-returns jsonb language plpgsql security definer set search_path=public,pg_catalog as $
+returns jsonb language plpgsql security definer set search_path=public,pg_catalog as $$
 declare
  pending_count integer;
  approved_count integer;
@@ -177,7 +177,7 @@ begin
   'completed_tasks',completed_count,
   'rewards_issued',reward_total
  );
-end $;
+end $$;
 
 create or replace function public.set_activation_status(p_user_id uuid,p_status public.activation_status)
 returns jsonb language plpgsql security definer set search_path=public,pg_catalog as $$
