@@ -7,7 +7,7 @@ import './styles.css';
 const TASK_TYPES={image:{label:'Image verification',icon:Image},text:{label:'Text verification',icon:FileText},data:{label:'Data verification',icon:Database},ocr:{label:'OCR verification',icon:ScanText}};
 
 function App(){
- const [session,setSession]=useState(null),[loading,setLoading]=useState(true),[view,setView]=useState(window.location.pathname==='/admin'?'admin':'home'),[task,setTask]=useState(null),[remaining,setRemaining]=useState(null),[error,setError]=useState(''),[status,setStatus]=useState(null),[profile,setProfile]=useState(null);
+ const [session,setSession]=useState(null),[loading,setLoading]=useState(true),[view,setView]=useState(window.location.pathname==='/admin'?'admin':'home'),[task,setTask]=useState(null),[remaining,setRemaining]=useState(null),[error,setError]=useState(''),[status,setStatus]=useState(null),[profile,setProfile]=useState(null),[submitting,setSubmitting]=useState(false),[lastResult,setLastResult]=useState(null);
  useEffect(()=>{if(!supabase){setLoading(false);return}supabase.auth.getSession().then(({data})=>{setSession(data.session);setLoading(false)});const {data:{subscription}}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s));return()=>subscription.unsubscribe()},[]);
  useEffect(()=>{if(session&&view!=='admin')loadStatus();},[session]);
  async function loadStatus(){
@@ -37,12 +37,19 @@ function App(){
   setTask(data);setRemaining(data.remaining??null);setError('');setView('task');
  }
  async function submit(answer){
-  if(!task)return;
+  if(!task||submitting)return;
   setError('');
+  setSubmitting(true);
   const {data,error}=await supabase.rpc('submit_task_answer',{p_assignment_id:task.assignment_id,p_answer:answer});
-  if(error){setError(error.message);return}
+  if(error){
+   setSubmitting(false);
+   setError([error.message,error.details,error.hint].filter(Boolean).join(' · '));
+   return;
+  }
+  setLastResult({correct:Boolean(data?.correct),reward:Number(data?.reward||0),balance:Number(data?.available_balance||0)});
   setRemaining(data?.remaining??null);
   await loadProfile();
+  setSubmitting(false);
   if(data?.status==='BATCH_COMPLETE'){setTask(null);setView('unlock')}else await loadTask();
  }
  async function signOut(){await supabase.auth.signOut();setSession(null);setStatus(null);setProfile(null);setTask(null);setView('home')}
@@ -51,7 +58,7 @@ function App(){
  if(view==='admin')return <AdminGate session={session} onBack={()=>{window.history.replaceState({},'', '/');setView(session?'pending':'home')}}/>;
  if(!session&&view==='auth')return <Auth onBack={()=>setView('home')} onSuccess={(s)=>{setSession(s);setView('pending')}}/>;
  if(!session)return <Home onStart={()=>setView('auth')}/>;
- if(view==='task'&&task)return <Task task={task} remaining={remaining} error={error} onBack={()=>{setError('');setView('dashboard')}} onSubmit={submit}/>;
+ if(view==='task'&&task)return <Task task={task} remaining={remaining} error={error} result={lastResult} submitting={submitting} onBack={()=>{setError('');setLastResult(null);setView('dashboard')}} onSubmit={submit}/>;
  if(view==='unlock')return <Unlock onBack={()=>setView('dashboard')} error={error} onRequest={()=>setError('More tasks are released only through an approved, verified unlock provider. No ad is being simulated.')}/>;
  if(view==='rejected')return <Rejected onSignOut={signOut}/>;
  if(view==='pending')return <Pending status={status} onRefresh={loadStatus} onSignOut={signOut}/>;
@@ -71,8 +78,7 @@ function Rejected({onSignOut}){return <Shell><main className="auth-wrap"><div cl
 
 function Dashboard({profile,remaining,error,onTask,onRefresh,onSignOut}){const credits=remaining??profile?.task_credits??0;return <Shell><main className="container"><div className="dashboard-head"><div><span className="eyebrow">YOUR WORKSPACE</span><h2>Ready when you are.</h2></div><div className="head-actions"><button className="icon-btn" onClick={onRefresh} title="Refresh"><RefreshCw size={18}/></button><button className="icon-btn" onClick={onSignOut} title="Sign out"><LogOut size={18}/></button></div></div><div className="dash-grid"><div className="card balance"><div className="icon-box"><WalletCards size={20}/></div><span className="muted">Available balance</span><strong>₹{Number(profile?.available_balance||0).toFixed(2)}</strong><small>Only server-validated task rewards are credited.</small></div><div className="card tasks"><div className="task-head"><span className="eyebrow">TASK QUEUE</span><span className="count">{credits}</span></div><h3>Verified data tasks</h3><p>Tasks are assigned by the server. The answer key stays in the database and is never sent to the browser before submission.</p><button className="primary" onClick={onTask}><Play size={16}/> Get next task <ChevronRight size={18}/></button>{error&&<div className="queue-warning"><CircleAlert size={17}/><div><b>Task queue status</b><span>{error}</span></div></div>}</div></div></main></Shell>}
 
-function Task({task,remaining,error,onBack,onSubmit}){const meta=TASK_TYPES[task.task_type]||TASK_TYPES.data,Icon=meta.icon;return <Shell><main className="container task-page"><div className="task-top"><button className="icon-btn" onClick={onBack}><ArrowLeft size={18}/></button><span>{remaining??'—'} tasks remaining</span></div><div className="progress"><span style={{width:'8%'}}/></div><section className="card task-card"><div className="type"><Icon size={15}/>{meta.label}</div>{task.asset_url?<img className="asset" src={task.asset_url} alt="Task input"/>:<div className="asset-placeholder"><Icon size={30}/><span>Source content</span></div>}<h1>{task.prompt}</h1>{task.answer_mode==='yes_no'?<div className="answers two"><button onClick={()=>onSubmit('YES')}><Check/>YES</button><button onClick={()=>onSubmit('NO')}><span className="x">×</span>NO</button></div>:<div className="answers">{(task.options||[]).map((o,i)=><button key={i} onClick={()=>onSubmit(String.fromCharCode(65+i))}><b>{String.fromCharCode(65+i)}</b>{o}</button>)}</div>}{error&&<div className="error">{error}</div>}</section></main></Shell>}
-
+function Task({task,remaining,error,result,submitting,onBack,onSubmit}){const meta=TASK_TYPES[task.task_type]||TASK_TYPES.data,Icon=meta.icon;return <Shell><main className="container task-page"><div className="task-top"><button className="icon-btn" onClick={onBack}><ArrowLeft size={18}/></button><span>{remaining??'—'} tasks remaining</span></div><div className="progress"><span style={{width:'8%'}}/></div><section className="card task-card"><div className="type"><Icon size={15}/>{meta.label}</div>{task.asset_url?<img className="asset" src={task.asset_url} alt="Task input" onError={(e)=>{e.currentTarget.style.display='none';e.currentTarget.parentElement?.classList.add('asset-error')}}/>:<div className="asset-placeholder"><Icon size={30}/><span>{task.task_type==='image'?'Image unavailable':'Text/source content'}</span></div>}<h1>{task.prompt}</h1>{task.answer_mode==='yes_no'?<div className="answers two"><button disabled={submitting} onClick={()=>onSubmit('YES')}><Check/>YES</button><button disabled={submitting} onClick={()=>onSubmit('NO')}><span className="x">×</span>NO</button></div>:<div className="answers">{(task.options||[]).map((o,i)=><button disabled={submitting} key={i} onClick={()=>onSubmit(String.fromCharCode(65+i))}><b>{String.fromCharCode(65+i)}</b>{o}</button>)}</div>}{submitting&&<div className="queue-warning"><RefreshCw size={17}/><div><b>Validating answer…</b><span>Your answer is being checked on the server.</span></div></div>}{result&&<div className="success"><Check size={18}/><span>{result.correct?'Correct — ₹'+result.reward.toFixed(2)+' credited.':'Answer recorded. No reward for this answer.'}</span></div>}{error&&<div className="error">{error}</div>}</section></main></Shell>}
 function Unlock({onBack,onRequest,error}){return <Shell><main className="auth-wrap"><div className="card unlock"><div className="success"><Check size={30}/></div><span className="eyebrow">BATCH COMPLETE</span><h2>Ready for more?</h2><p>Your current task batch is complete. More work will be released only when the verified task supply and unlock system make it available.</p><button className="primary full" onClick={onRequest}>Check for more tasks <RefreshCw size={17}/></button><button className="link" onClick={onBack}>Back to dashboard</button>{error&&<div className="error">{error}</div>}</div></main></Shell>}
 
 function AdminGate({session,onBack}){const [email,setEmail]=useState(''),[password,setPassword]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[authorized,setAuthorized]=useState(false);
